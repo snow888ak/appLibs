@@ -5,13 +5,13 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Bundle;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -19,25 +19,13 @@ import android.widget.Toast;
 
 import com.kezhong.libs.utils.system.AppDetailSetting;
 import com.orhanobut.logger.Logger;
-import com.tbruyelle.rxpermissions2.Permission;
-import com.tbruyelle.rxpermissions2.RxPermissions;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Observer;
-import java.util.concurrent.TimeUnit;
-
-import io.reactivex.Observable;
-import io.reactivex.disposables.Disposable;
-import io.reactivex.functions.Consumer;
-import io.reactivex.functions.Function;
-import io.reactivex.functions.Predicate;
 
 public class MainActivity extends AppCompatActivity {
 
 	private Button mBtnCamera;
 	private Button mBtnCall;
+
+	private AlertDialog mDialog;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -85,77 +73,86 @@ public class MainActivity extends AppCompatActivity {
 				}
 			}
 		});
+//		findViewById(R.id.btn_single_permissions).setOnClickListener(new View.OnClickListener() {
+//			@Override
+//			public void onClick(View v) {
+//				RxPermissions permissions = new RxPermissions(MainActivity.this);
+//				permissions.requestEach(Manifest.permission.CAMERA)
+//						.subscribe(new Consumer<Permission>() {
+//							@Override
+//							public void accept(Permission permission) throws Exception {
+//								if (permission.granted) {
+//									Toast.makeText(MainActivity.this, "已授权", Toast.LENGTH_SHORT).show();
+//								} else if (permission.forbiddenPermissionsRequest) {
+//									Toast.makeText(MainActivity.this, "被拒绝", Toast.LENGTH_SHORT).show();
+//								} else {
+//									Toast.makeText(MainActivity.this, "已禁止显示询问", Toast.LENGTH_SHORT).show();
+//									showTipDialog();
+//								}
+//							}
+//						});
+//			}
+//		});
 		findViewById(R.id.btn_single_permissions).setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				RxPermissions permissions = new RxPermissions(MainActivity.this);
-				permissions.requestEach(Manifest.permission.CAMERA)
-						.subscribe(new Consumer<Permission>() {
+				PermissionManager manager = PermissionHelper.getPermissionManager(MainActivity.this,
+						new PermissionCallback() {
 							@Override
-							public void accept(Permission permission) throws Exception {
-								if (permission.granted) {
-									Toast.makeText(MainActivity.this, "已授权", Toast.LENGTH_SHORT).show();
-								} else if (permission.shouldShowRequestPermissionRationale) {
-									Toast.makeText(MainActivity.this, "被拒绝", Toast.LENGTH_SHORT).show();
-								} else {
-									Toast.makeText(MainActivity.this, "已禁止显示询问", Toast.LENGTH_SHORT).show();
-									showTipDialog();
-								}
+							public void onPermissionsGranted() {
+								Toast.makeText(MainActivity.this, "已授权", Toast.LENGTH_SHORT).show();
+							}
+
+							@Override
+							public void onPermissionsDenied() {
+								Toast.makeText(MainActivity.this, "未授权", Toast.LENGTH_SHORT).show();
+							}
+
+							@Override
+							public void forbiddenPermissionsRequest() {
+								showTipDialog();
 							}
 						});
+				manager.requestPermissions(Manifest.permission.CAMERA);
 			}
 		});
+
 		findViewById(R.id.btn_multiple_permissions).setOnClickListener(new View.OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				RxPermissions permissions = new RxPermissions(MainActivity.this);
-				permissions.requestEach(Manifest.permission.CALL_PHONE,
+				final long timeStart = System.currentTimeMillis();
+				PermissionManager manager = PermissionHelper.getPermissionManager(MainActivity.this,
+						new PermissionCallback() {
+							@Override
+							public void onPermissionsGranted() {
+								Toast.makeText(MainActivity.this, "已授权", Toast.LENGTH_SHORT).show();
+								long timeEnd = System.currentTimeMillis();
+								Logger.d(timeEnd - timeStart + " \tonPermissionsGranted");
+							}
+
+							@Override
+							public void onPermissionsDenied() {
+								Toast.makeText(MainActivity.this, "未授权", Toast.LENGTH_SHORT).show();
+								long timeEnd = System.currentTimeMillis();
+								Logger.d(timeEnd - timeStart + " \tonPermissionsDenied");
+							}
+
+							@Override
+							public void forbiddenPermissionsRequest() {
+								long timeEnd = System.currentTimeMillis();
+								Logger.d(timeEnd - timeStart + " \tforbiddenPermissionsRequest");
+									showTipDialog();
+							}
+						});
+				manager.requestPermissions(
+						Manifest.permission.CALL_PHONE,
 						Manifest.permission.ACCESS_COARSE_LOCATION,
 						Manifest.permission.ACCESS_FINE_LOCATION,
 						Manifest.permission.WRITE_EXTERNAL_STORAGE,
-						Manifest.permission.READ_EXTERNAL_STORAGE)
-						.filter(new Predicate<Permission>() {
-							@Override
-							public boolean test(Permission permission) throws Exception {
-								return !permission.granted;
-							}
-						})
-						.subscribe(new io.reactivex.Observer<Permission>() {
-
-							private Disposable mDisposable;
-
-							@Override
-							public void onSubscribe(Disposable d) {
-								Logger.d("onSubscribe");
-								mDisposable = d;
-							}
-
-							@Override
-							public void onNext(Permission permission) {
-								Logger.d("onNext + " + permission);
-								if (!permission.granted) {
-									//有任何权限被拒绝，停止
-									mDisposable.dispose();
-									if (!permission.shouldShowRequestPermissionRationale) {
-										showTipDialog();
-									}
-									Logger.d("dispose");
-									//测试是否能通过AS提交代码更新。
-								}
-							}
-
-							@Override
-							public void onError(Throwable e) {
-								Logger.d("onError");
-							}
-
-							@Override
-							public void onComplete() {
-								Logger.d("onComplete");
-							}
-						});
+						Manifest.permission.READ_EXTERNAL_STORAGE);
 			}
 		});
+		initDialog();
 	}
 
 	@Override
@@ -177,7 +174,7 @@ public class MainActivity extends AppCompatActivity {
 		}
 	}
 
-	private void showTipDialog() {
+	private void initDialog() {
 		AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(this);
 		dialogBuilder.setMessage("请设置相关权限！")
 				.setTitle("提示！")
@@ -193,8 +190,15 @@ public class MainActivity extends AppCompatActivity {
 						dialog.dismiss();
 					}
 				});
-		dialogBuilder.create().show();
+		mDialog = dialogBuilder.create();
+	}
 
+	private void showTipDialog() {
+		if (mDialog.isShowing()) {
+			return;
+		} else {
+			mDialog.show();
+		}
 	}
 
 }
