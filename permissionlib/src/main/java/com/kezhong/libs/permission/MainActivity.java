@@ -140,6 +140,7 @@ public class MainActivity extends AppCompatActivity {
 										showTipDialog();
 									}
 									Logger.d("dispose");
+									//测试是否能通过AS提交代码更新。
 								}
 							}
 
